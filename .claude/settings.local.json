@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile converter/preview.py)",
+      "Bash(python -m py_compile converter/engine.py)",
+      "Bash(python -m py_compile converter/readers/pxt_reader.py)",
+      "Bash(python -m py_compile gui/preview_tab.py)",
+      "Bash(python -m py_compile gui/convert_tab.py)",
+      "Bash(python -m py_compile gui/params_tab.py)",
+      "Read(//d/ZhouHY/dccnn/**)",
+      "Bash(mkdir -p erlabpy_explore)",
+      "Bash(python -m venv .venv)",
+      "Bash(python -m py_compile converter/writer.py)",
+      "Bash(python -m py_compile gui/convert_worker.py)"
+    ]
+  }
+}
