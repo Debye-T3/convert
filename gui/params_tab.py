@@ -34,7 +34,7 @@ FIELD_DEFAULTS = {
 
 POLARIZATION_OPTIONS = ["", "p-pol", "s-pol", "circular", "linear", "none"]
 
-CUSTOM_PREFIX = "custom_"
+CUSTOM_PREFIX = "user_"
 
 
 class ParamsTab(QWidget):
@@ -48,8 +48,7 @@ class ParamsTab(QWidget):
         super().__init__(parent)
         self._file_paths = []
         self._overrides = {}          # fp -> {key: value}
-        self._hidden_cols = set()     # logical column indices (1-based)
-        self._rebuilding = False
+        self._hidden_cols = set()     # logical parameter column indices
 
         # dynamic field lists (parallel arrays)
         self._field_keys = list(STANDARD_KEYS)
@@ -76,7 +75,7 @@ class ParamsTab(QWidget):
         nav = QHBoxLayout()
         nav.addWidget(QPushButton("← Back: Select Files", clicked=self._go_back))
         nav.addStretch()
-        nav.addWidget(QPushButton("Next: Preview →", clicked=self._go_next))
+        nav.addWidget(QPushButton("Next: Convert →", clicked=self._go_next))
         layout.addLayout(nav)
 
     # ================================================================
@@ -150,6 +149,20 @@ class ParamsTab(QWidget):
         table_group = QGroupBox("Per-File Overrides")
         table_layout = QVBoxLayout(table_group)
 
+        current_row = QHBoxLayout()
+        current_file_title = QLabel("Current file:")
+        current_file_title.setStyleSheet("color: #cbd5e1;")
+        current_row.addWidget(current_file_title)
+        self.current_file_label = QLabel("-")
+        self.current_file_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.current_file_label.setStyleSheet(
+            "font-weight: bold; padding: 4px 8px; color: #f3f4f6; "
+            "background-color: #2b2f3a; border: 1px solid #4b5563; "
+            "border-radius: 4px;"
+        )
+        current_row.addWidget(self.current_file_label, 1)
+        table_layout.addLayout(current_row)
+
         self.table = QTableWidget()
         self.table.horizontalHeader().setSectionsMovable(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
@@ -164,6 +177,8 @@ class ParamsTab(QWidget):
         self.table.verticalHeader().setDefaultSectionSize(24)
         self.table.setAlternatingRowColors(True)
         self.table.cellChanged.connect(self._on_cell_changed)
+        self.table.itemSelectionChanged.connect(self._update_current_file_from_selection)
+        self.table.currentCellChanged.connect(self._on_current_cell_changed)
         table_layout.addWidget(self.table)
 
         # buttons under table
@@ -172,7 +187,7 @@ class ParamsTab(QWidget):
         import_btn = QPushButton("Import from Excel...")
         import_btn.setToolTip(
             "Import per-file parameters from an Excel spreadsheet.\n"
-            "First column must contain file names."
+            "A 'file' or 'path' column must contain source data paths."
         )
         import_btn.clicked.connect(self._import_excel)
         btn_row.addWidget(import_btn)
@@ -245,33 +260,37 @@ class ParamsTab(QWidget):
         return self._field_labels
 
     def _rebuild_table(self):
-        self._rebuilding = True
+        self.table.blockSignals(True)
         keys = self._all_field_keys
         labels = self._all_field_labels
-        n_cols = len(keys) + 1  # +1 for File column
+        n_cols = len(keys) + 1
 
         self.table.setColumnCount(n_cols)
         self.table.setHorizontalHeaderLabels(["File"] + list(labels))
-
         self.table.setRowCount(len(self._file_paths))
+
         for i, fp in enumerate(self._file_paths):
             name_item = QTableWidgetItem(Path(fp).name)
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            name_item.setToolTip(fp)
             self.table.setItem(i, 0, name_item)
             for j, key in enumerate(keys):
                 col = j + 1
                 val = self._overrides.get(fp, {}).get(key, "")
                 self.table.setItem(i, col, QTableWidgetItem(str(val) if val else ""))
 
-        # apply column visibility (by logical column)
         for col in range(1, self.table.columnCount()):
             self.table.setColumnHidden(col, col in self._hidden_cols)
-
-        self._rebuilding = False
+        self.table.setColumnHidden(0, False)
+        self.table.blockSignals(False)
+        if self._file_paths and self.table.currentRow() < 0:
+            self.table.setCurrentCell(0, 1 if self.table.columnCount() > 1 else 0)
+        self._update_current_file_label(self.table.currentRow())
 
     def _on_cell_changed(self, row, col):
-        if self._rebuilding or row >= len(self._file_paths):
+        if row >= len(self._file_paths) or col <= 0:
             return
+        self._update_current_file_label(row)
         fp = self._file_paths[row]
         key_index = col - 1
         if key_index < 0 or key_index >= len(self._all_field_keys):
@@ -288,15 +307,34 @@ class ParamsTab(QWidget):
             if not self._overrides[fp]:
                 del self._overrides[fp]
 
+    def _on_current_cell_changed(self, row, _col, _previous_row, _previous_col):
+        self._update_current_file_label(row)
+
+    def _update_current_file_from_selection(self):
+        items = self.table.selectedItems()
+        if items:
+            self._update_current_file_label(items[0].row())
+
+    def _update_current_file_label(self, row):
+        if 0 <= row < len(self._file_paths):
+            path = self._file_paths[row]
+            self.current_file_label.setText(Path(path).name)
+            self.current_file_label.setToolTip(path)
+        else:
+            self.current_file_label.setText("-")
+            self.current_file_label.setToolTip("")
+
     # ================================================================
     #  column hide / show
     # ================================================================
 
     def _header_context_menu(self, pos):
         col = self.table.horizontalHeader().logicalIndexAt(pos)
-        if col <= 0:   # file name column never hidden
+        if col <= 0:
             return
         key_index = col - 1
+        if key_index < 0 or key_index >= len(self._all_field_keys):
+            return
         is_custom = self._all_field_keys[key_index].startswith(CUSTOM_PREFIX)
 
         menu = QMenu(self)
@@ -310,14 +348,11 @@ class ParamsTab(QWidget):
             remove_action = QAction(f"Remove '{label}'", self)
             remove_action.triggered.connect(lambda: self._remove_custom_field(key_index))
             menu.addAction(remove_action)
-
-        menu.addSeparator()
-        show_all = QAction("Show All Columns", self)
-        show_all.triggered.connect(self._show_all_columns)
-        menu.addAction(show_all)
         menu.exec(self.table.horizontalHeader().mapToGlobal(pos))
 
     def _hide_column(self, col):
+        if col <= 0:
+            return
         self._hidden_cols.add(col)
         self.table.setColumnHidden(col, True)
 
@@ -418,7 +453,7 @@ class ParamsTab(QWidget):
     def _import_excel(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Import Excel Parameters", "",
-            "Excel Files (*.xlsx *.xls);;All Files (*)"
+            "Excel Files (*.xlsx);;All Files (*)"
         )
         if not path:
             return
@@ -435,19 +470,32 @@ class ParamsTab(QWidget):
         try:
             wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
             ws = wb.active
-            rows = list(ws.iter_rows(values_only=True))
-            if not rows or len(rows) < 2:
+            row_iter = ws.iter_rows(values_only=True)
+            header_row = next(row_iter, None)
+            if not header_row:
                 QMessageBox.warning(self, "Empty File", "No data found in Excel file.")
                 wb.close()
                 return
 
-            header = [str(c).strip() if c else "" for c in rows[0]]
-            # map Excel column -> param key (by label or by key)
-            col_to_key = {}
+            header = [str(c).strip() if c else "" for c in header_row]
+            file_col = None
             for ci, h in enumerate(header):
-                if ci == 0:
-                    continue  # file name column
-                # try exact label match first
+                if h.lower() in {"file", "path", "filepath", "file_path"}:
+                    file_col = ci
+                    break
+            if file_col is None:
+                QMessageBox.warning(
+                    self, "Missing Column",
+                    "Excel must contain a 'file' or 'path' column."
+                )
+                wb.close()
+                return
+
+            col_to_key = {}
+            added_columns = []
+            for ci, h in enumerate(header):
+                if ci == file_col or not h:
+                    continue
                 matched = False
                 for key, label in zip(self._all_field_keys, self._all_field_labels):
                     if h == label or h.lower() == key.lower():
@@ -455,31 +503,52 @@ class ParamsTab(QWidget):
                         matched = True
                         break
                 if not matched:
-                    # try fuzzy: strip units, lowercase
                     for key, label in zip(self._all_field_keys, self._all_field_labels):
                         if h.lower().split("(")[0].strip() == label.lower().split("(")[0].strip():
                             col_to_key[ci] = key
+                            matched = True
                             break
+                if not matched:
+                    key = self._user_key_from_header(h)
+                    if key not in self._field_keys:
+                        self._field_keys.append(key)
+                        self._field_labels.append(h)
+                        added_columns.append((key, h))
+                    col_to_key[ci] = key
 
-            file_names = [Path(fp).name for fp in self._file_paths]
+            for key, label in added_columns:
+                self._add_custom_widget_for_key(key, label)
+
+            excel_dir = Path(path).resolve().parent
             imported = 0
-            for row in rows[1:]:
-                if not row or not row[0]:
+            added_files = []
+            pending_overrides = {}
+            for row in row_iter:
+                if not row or file_col >= len(row) or not row[file_col]:
                     continue
-                fname = str(row[0]).strip()
-                if fname not in file_names:
+                src = self._resolve_excel_source(str(row[file_col]).strip(), excel_dir)
+                if src is None:
                     continue
-                fp = self._file_paths[file_names.index(fname)]
+                fp = str(src)
+                if fp not in self._file_paths and fp not in added_files:
+                    added_files.append(fp)
                 overrides = {}
                 for ci, key in col_to_key.items():
                     val = row[ci] if ci < len(row) else None
                     if val is not None and str(val).strip():
-                        overrides[key] = str(val).strip()
+                        overrides[key] = val
                 if overrides:
-                    self._overrides[fp] = overrides
+                    pending_overrides[fp] = overrides
                     imported += 1
 
             wb.close()
+            if added_files:
+                w = self.window()
+                if w and hasattr(w, "file_tab"):
+                    w.file_tab.add_files(added_files)
+                else:
+                    self._file_paths.extend(added_files)
+            self._overrides.update(pending_overrides)
             self._rebuild_table()
             QMessageBox.information(
                 self, "Import Complete",
@@ -487,6 +556,37 @@ class ParamsTab(QWidget):
             )
         except Exception as exc:
             QMessageBox.warning(self, "Import Error", str(exc))
+
+    def _user_key_from_header(self, header):
+        safe = "".join(ch.lower() if ch.isalnum() else "_" for ch in header.strip())
+        safe = "_".join(part for part in safe.split("_") if part)
+        return CUSTOM_PREFIX + (safe or "field")
+
+    def _resolve_excel_source(self, value, excel_dir):
+        raw = Path(value)
+        candidates = [raw if raw.is_absolute() else (excel_dir / raw)]
+        candidates.extend(Path(fp) for fp in self._file_paths if Path(fp).name == raw.name)
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                continue
+            if resolved.is_file():
+                return resolved
+        return None
+
+    def _add_custom_widget_for_key(self, key, label):
+        edit = QLineEdit()
+        edit.setPlaceholderText(label)
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedWidth(28)
+        remove_btn.setToolTip(f"Remove '{label}'")
+        remove_btn.clicked.connect(lambda: self._remove_custom_field_by_key(key))
+        row_layout = QHBoxLayout()
+        row_layout.addWidget(edit, 1)
+        row_layout.addWidget(remove_btn)
+        self._custom_container.addLayout(row_layout)
+        self._custom_widgets[key] = (edit, remove_btn, row_layout)
 
     # ================================================================
     #  Excel template export
@@ -519,11 +619,13 @@ class ParamsTab(QWidget):
         vis_order = sorted(range(n_cols), key=lambda c: hdr.visualIndex(c))
 
         header_row = []
+        header_row.append("file")
         for logical_col in vis_order:
+            if logical_col == 0:
+                continue
             if self.table.isColumnHidden(logical_col):
                 continue
-            label = self._all_field_labels[logical_col - 1] if logical_col > 0 else "File"
-            header_row.append(label)
+            header_row.append(self._all_field_keys[logical_col - 1])
         ws.append(header_row)
 
         # example row
