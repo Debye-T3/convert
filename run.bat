@@ -1,4 +1,4 @@
 @echo off
-cd /d "D:\ZhouHY\dccnn\convert"
-C:\Users\Zhou\anaconda3\python.exe converter_app.py
+cd /d "D:\Projects\convert"
+D:\Anaconda\Scripts\conda.exe run -n convert-da30 python converter_app.py
 pause

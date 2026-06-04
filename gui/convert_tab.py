@@ -1,7 +1,6 @@
-"""Tab 4: Conversion with progress, log, output folder, and result previews."""
+"""Tab 3: conversion with progress, log, output folder, and H5 results."""
 
 import os
-import subprocess
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -18,7 +17,8 @@ class ConvertTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._worker = None
-        self._results = []  # list of (output_h5_path, preview_png_path_or_None)
+        self._results = []
+        self._failures = []
 
         layout = QVBoxLayout(self)
 
@@ -58,7 +58,7 @@ class ConvertTab(QWidget):
         self.progress_label = QLabel("")
         layout.addWidget(self.progress_label)
 
-        results_label = QLabel("Converted files (double-click to open):")
+        results_label = QLabel("Converted H5 files:")
         layout.addWidget(results_label)
         self.results_list = QListWidget()
         self.results_list.setMaximumHeight(100)
@@ -76,16 +76,20 @@ class ConvertTab(QWidget):
         layout.addWidget(self.log_view, 1)
 
         nav = QHBoxLayout()
-        back_btn = QPushButton("← Back: Preview")
-        back_btn.clicked.connect(lambda: self._nav_to(2))
+        back_btn = QPushButton("← Back: Parameters")
+        back_btn.clicked.connect(lambda: self._nav_to(1))
         nav.addWidget(back_btn)
         nav.addStretch()
+        info_btn = QPushButton("Next: H5 Info →")
+        info_btn.clicked.connect(lambda: self._nav_to(3))
+        nav.addWidget(info_btn)
         layout.addLayout(nav)
 
     def _browse_output(self):
         d = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if d:
             self.out_dir_edit.setText(d)
+            self._sync_h5_info_tab()
 
     def _open_output_folder(self):
         out_dir = self.out_dir_edit.text().strip() or "data/converted_h5/"
@@ -101,17 +105,16 @@ class ConvertTab(QWidget):
             return
 
         params = w.params_tab.get_all_params()
-        preview_enabled = w.preview_tab.is_preview_enabled()
-        preview_settings = w.preview_tab.get_settings()
         output_dir = self.out_dir_edit.text().strip() or "data/converted_h5/"
 
         self._results.clear()
+        self._failures.clear()
         self.results_list.clear()
         self.log_view.clear()
 
         self._log(f"Starting conversion of {len(file_paths)} file(s)...")
         self._log(f"Output: {output_dir}")
-        self._log(f"Preview: {'Yes' if preview_enabled else 'No'}")
+        self._log("Preview: disabled")
         self._log("-" * 40)
 
         self.progress_bar.setVisible(True)
@@ -120,9 +123,7 @@ class ConvertTab(QWidget):
         self.start_btn.setEnabled(False)
         self.open_folder_btn.setEnabled(False)
 
-        self._worker = ConvertWorker(
-            file_paths, params, output_dir, preview_enabled, preview_settings
-        )
+        self._worker = ConvertWorker(file_paths, params, output_dir)
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)
         self._worker.all_done.connect(self._on_all_done)
@@ -140,14 +141,13 @@ class ConvertTab(QWidget):
         if success:
             from pathlib import Path
             out_path = Path(path)
-            prev_path = out_path.with_suffix(".png")
-            if not prev_path.exists():
-                prev_path = None
-            self._results.append((str(out_path), str(prev_path) if prev_path else None))
+            self._results.append(str(out_path))
             display_name = out_path.stem
             item = QListWidgetItem(f"{display_name}  ✓")
-            item.setToolTip(f"HDF5: {out_path}\nPreview: {prev_path or 'N/A'}")
+            item.setToolTip(f"HDF5: {out_path}")
             self.results_list.addItem(item)
+        else:
+            self._failures.append(msg)
 
     def _on_all_done(self, success, fail):
         self.progress_bar.setValue(self.progress_bar.maximum())
@@ -156,22 +156,28 @@ class ConvertTab(QWidget):
         self.open_folder_btn.setEnabled(True)
         self._log(f"\n{'=' * 40}")
         self._log(f"Conversion complete: {success} success, {fail} failed")
+        self._sync_h5_info_tab()
         if fail == 0 and success > 0:
             QMessageBox.information(
                 self, "Done",
                 f"All {success} file(s) converted successfully.\n\n"
                 f"Output folder:\n{os.path.abspath(self.out_dir_edit.text().strip())}"
             )
+        elif fail > 0:
+            detail = "\n".join(self._failures[:10])
+            if len(self._failures) > 10:
+                detail += f"\n... and {len(self._failures) - 10} more."
+            QMessageBox.warning(
+                self, "Conversion Finished with Failures",
+                f"{success} file(s) converted, {fail} failed.\n\n{detail}"
+            )
 
     def _on_result_double_clicked(self, item):
         idx = self.results_list.row(item)
         if idx < 0 or idx >= len(self._results):
             return
-        h5_path, prev_path = self._results[idx]
-        if prev_path:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(prev_path)))
-        else:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(h5_path)))
+        h5_path = self._results[idx]
+        QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(h5_path)))
 
     def _log(self, text, color="#a0ffa0"):
         self.log_view.append(f"<span style='color:{color};'>{text}</span>")
@@ -180,3 +186,9 @@ class ConvertTab(QWidget):
         w = self.window()
         if w and hasattr(w, "tabs"):
             w.tabs.setCurrentIndex(idx)
+
+    def _sync_h5_info_tab(self):
+        w = self.window()
+        if w and hasattr(w, "h5_info_tab"):
+            output_dir = self.out_dir_edit.text().strip() or "data/converted_h5/"
+            w.h5_info_tab.set_output_dir(output_dir)

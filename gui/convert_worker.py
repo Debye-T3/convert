@@ -25,13 +25,11 @@ class ConvertWorker(QThread):
     file_done = Signal(str, bool, str)
     all_done = Signal(int, int)
 
-    def __init__(self, file_paths, batch_params, output_dir, preview_enabled, preview_settings, parent=None):
+    def __init__(self, file_paths, batch_params, output_dir, parent=None):
         super().__init__(parent)
         self.file_paths = file_paths
         self.batch_params = batch_params
         self.output_dir = Path(output_dir)
-        self.preview_enabled = preview_enabled
-        self.preview_settings = preview_settings or {}
 
     def run(self):
         success = 0
@@ -45,8 +43,8 @@ class ConvertWorker(QThread):
 
                 result = convert_file(
                     path, self.output_dir, params,
-                    preview_enabled=self.preview_enabled,
-                    preview_settings=self.preview_settings,
+                    preview_enabled=False,
+                    preview_settings=None,
                     pxt_channel=int(params.get("pxt_channel", 0)),
                     pxt_subtract_dark=bool(params.get("pxt_subtract_dark", False)),
                     pxt_energy_offset=_opt_float(params, "pxt_energy_offset"),

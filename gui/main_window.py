@@ -1,11 +1,11 @@
-"""Main window with QTabWidget containing all four converter tabs."""
+"""Main window with QTabWidget containing the converter workflow tabs."""
 
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
 from gui.file_tab import FileTab
 from gui.params_tab import ParamsTab
-from gui.preview_tab import PreviewTab
 from gui.convert_tab import ConvertTab
+from gui.h5_info_tab import H5InfoTab
 
 
 class MainWindow(QMainWindow):
@@ -24,16 +24,15 @@ class MainWindow(QMainWindow):
 
         self.file_tab = FileTab()
         self.params_tab = ParamsTab()
-        self.preview_tab = PreviewTab()
         self.convert_tab = ConvertTab()
+        self.h5_info_tab = H5InfoTab()
 
         self.tabs.addTab(self.file_tab, "1. Select Files")
         self.tabs.addTab(self.params_tab, "2. Parameters")
-        self.tabs.addTab(self.preview_tab, "3. Preview")
-        self.tabs.addTab(self.convert_tab, "4. Convert")
+        self.tabs.addTab(self.convert_tab, "3. Convert")
+        self.tabs.addTab(self.h5_info_tab, "4. H5 Info")
 
         self.file_tab.files_changed.connect(self._on_files_changed)
 
     def _on_files_changed(self, file_paths):
         self.params_tab.set_files(file_paths)
-        self.preview_tab.set_files(file_paths)

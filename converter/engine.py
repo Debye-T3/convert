@@ -1,13 +1,20 @@
-"""Conversion engine — pure-Python orchestrator. No Qt dependency."""
+"""Conversion engine - pure-Python orchestrator. No Qt dependency."""
 
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import numpy as np
-
 from converter.readers.txt_reader import read_txt
-from converter.readers.pxt_reader import read_pxt, load_bin
-from converter.writer import write_h5
+from converter.readers.pxt_reader import read_pxt
+from converter.readers.da30_zip_reader import load_zip
+from converter.xarray_io import (
+    apply_metadata,
+    axes_for_preview,
+    first_2d_dataarray,
+    legacy_result_to_dataarray,
+    normalize_da30_dims,
+    unique_output_path,
+    write_xarray_h5,
+)
 from converter.preview import generate_preview
 
 
@@ -21,24 +28,58 @@ MANUAL_PARAM_KEYS = [
 
 
 def detect_format(path: Path) -> str:
-    """Detect file format from extension. Returns 'txt', 'pxt', or 'bin'."""
+    """Detect file format from extension."""
     suffix = path.suffix.lower()
     if suffix == ".txt":
         return "txt"
     elif suffix == ".pxt":
         return "pxt"
-    elif suffix == ".bin":
-        return "bin"
+    elif suffix == ".pxp":
+        return "pxp"
+    elif suffix == ".zip":
+        return "zip"
     raise ValueError(f"Unsupported file extension: {suffix}")
 
 
 def merge_params(batch_defaults: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
     """Merge batch defaults with per-file overrides. Override wins if non-empty."""
-    merged = dict(batch_defaults)
+    merged = {key: value for key, value in batch_defaults.items() if not key.startswith("_")}
     for key, value in overrides.items():
         if value is not None and value != "":
             merged[key] = value
     return merged
+
+
+def read_as_xarray(path: Path, *, pxt_channel: int = 0,
+                   pxt_subtract_dark: bool = False,
+                   pxt_energy_offset: Optional[float] = None,
+                   pxt_energy_step: Optional[float] = None,
+                   pxt_angle_offset: Optional[float] = None,
+                   pxt_angle_step: Optional[float] = None):
+    """Read a supported source file as an xarray object."""
+    fmt = detect_format(path)
+    if fmt == "txt":
+        return normalize_da30_dims(legacy_result_to_dataarray(read_txt(path), name=path.stem))
+    if fmt == "zip":
+        return normalize_da30_dims(load_zip(path))
+    if fmt in {"pxt", "pxp"}:
+        try:
+            from converter.readers.igor_reader import load_experiment
+            return normalize_da30_dims(load_experiment(path, recursive=True))
+        except Exception:
+            if fmt != "pxt":
+                raise
+            result = read_pxt(
+                path,
+                channel=pxt_channel,
+                subtract_dark=pxt_subtract_dark,
+                energy_offset_override=pxt_energy_offset,
+                energy_step_override=pxt_energy_step,
+                angle_offset_override=pxt_angle_offset,
+                angle_step_override=pxt_angle_step,
+            )
+            return normalize_da30_dims(legacy_result_to_dataarray(result, name=path.stem))
+    raise ValueError(f"Unknown format: {fmt}")
 
 
 def convert_file(
@@ -76,52 +117,27 @@ def convert_file(
         dict with keys: success (bool), message (str), output_path (str or None)
     """
     fmt = detect_format(path)
-
-    if fmt == "txt":
-        result = read_txt(path)
-    elif fmt == "pxt":
-        result = read_pxt(
-            path,
-            channel=pxt_channel,
-            subtract_dark=pxt_subtract_dark,
-            energy_offset_override=pxt_energy_offset,
-            energy_step_override=pxt_energy_step,
-            angle_offset_override=pxt_angle_offset,
-            angle_step_override=pxt_angle_step,
-        )
-    elif fmt == "bin":
-        spectrum_3d = load_bin(path, (365, 571, 51), "float32")
-        result = {
-            "spectrum": spectrum_3d[:, :, 25],
-            "energy": np.arange(spectrum_3d.shape[0], dtype=np.float32),
-            "thetax": np.arange(spectrum_3d.shape[1], dtype=np.float32),
-            "ses_params": {},
-        }
-    else:
-        raise ValueError(f"Unknown format: {fmt}")
-
-    spectrum = result["spectrum"]
-    energy = result["energy"]
-    thetax = result["thetax"]
-    ses_params = result.get("ses_params", {})
-    raw_channels = result.get("raw_channels")
-
-    out_path = output_dir / (path.stem + ".h5")
-
-    write_h5(
-        spectrum, energy, thetax, out_path,
-        source_format=fmt,
-        source_path=str(path),
-        manual_params=params,
-        ses_params=ses_params,
-        raw_channels=raw_channels,
-        overwrite=True,
+    data = read_as_xarray(
+        path,
+        pxt_channel=pxt_channel,
+        pxt_subtract_dark=pxt_subtract_dark,
+        pxt_energy_offset=pxt_energy_offset,
+        pxt_energy_step=pxt_energy_step,
+        pxt_angle_offset=pxt_angle_offset,
+        pxt_angle_step=pxt_angle_step,
     )
+    data = apply_metadata(data, source_format=fmt, source_path=path, manual_params=params)
 
-    messages = [f"[OK] {path.name} -> {out_path}"]
+    out_path = unique_output_path(output_dir, path.stem, ".h5")
+    write_xarray_h5(data, out_path)
+    region_kind = "multi region" if hasattr(data, "children") and len(getattr(data, "children", {})) else "single region"
+
+    messages = [f"[OK] {path.name} -> {out_path} ({region_kind})"]
 
     if preview_enabled:
         try:
+            preview_arr = first_2d_dataarray(data)
+            spectrum, energy, thetax = axes_for_preview(preview_arr)
             p_settings = preview_settings or {}
             prev_dir = preview_base_dir or output_dir
             prev_path = prev_dir / (path.stem + ".png")

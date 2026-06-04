@@ -1,0 +1,17 @@
+name: convert-da30
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pyside6
+  - numpy
+  - matplotlib
+  - xarray
+  - h5netcdf
+  - netcdf4
+  - h5py
+  - openpyxl
+  - pip
+  - pip:
+      - igor2
+      - pyinstaller

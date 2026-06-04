@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Qt
 
 
-VALID_EXTENSIONS = {".txt", ".pxt", ".bin"}
+VALID_EXTENSIONS = {".txt", ".pxt", ".pxp", ".zip"}
 
 
 class FileTab(QWidget):
@@ -26,7 +26,7 @@ class FileTab(QWidget):
         title.setStyleSheet("font-size: 14pt; font-weight: bold;")
         layout.addWidget(title)
 
-        self.drop_label = QLabel("Drag & drop .txt, .pxt, or .bin files here\n— or —")
+        self.drop_label = QLabel("Drag & drop .txt, .pxt, .pxp, or .zip files here\n— or —")
         self.drop_label.setAlignment(Qt.AlignCenter)
         self.drop_label.setStyleSheet(
             "border: 2px dashed #888; border-radius: 8px; padding: 30px; color: #888;"
@@ -60,8 +60,12 @@ class FileTab(QWidget):
     def _browse(self):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select ARPES Data Files", "",
-            "ARPES Files (*.txt *.pxt *.bin);;All Files (*)"
+            "ARPES Files (*.txt *.pxt *.pxp *.zip);;All Files (*)"
         )
+        for p in paths:
+            self._add_file(Path(p))
+
+    def add_files(self, paths):
         for p in paths:
             self._add_file(Path(p))
 

@@ -16,10 +16,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from converter.readers.txt_reader import read_txt
-from converter.readers.pxt_reader import read_pxt
 from converter.preview import compute_contrast
-from converter.engine import detect_format
+from converter.engine import read_as_xarray
+from converter.xarray_io import axes_for_preview, first_2d_dataarray
 
 
 COLORMAPS = ["inferno", "viridis", "plasma", "gray", "jet", "turbo"]
@@ -133,24 +132,9 @@ class PreviewTab(QWidget):
         fp = self._file_paths[index]
         path = Path(fp)
         try:
-            fmt = detect_format(path)
-            if fmt == "txt":
-                data = read_txt(path)
-            elif fmt == "pxt":
-                data = read_pxt(path)
-            elif fmt == "bin":
-                QMessageBox.information(
-                    self, "Binary File",
-                    f"{path.name}\n\n"
-                    "Raw .bin files require manual shape input.\n"
-                    "Use the Convert tab to specify dimensions."
-                )
-                return
-            else:
-                return
-            self._current_data = data["spectrum"]
-            self._current_energy = data["energy"]
-            self._current_angle = data["thetax"]
+            data = read_as_xarray(path)
+            arr = first_2d_dataarray(data)
+            self._current_data, self._current_energy, self._current_angle = axes_for_preview(arr)
             self._refresh_preview()
         except Exception as exc:
             import traceback
