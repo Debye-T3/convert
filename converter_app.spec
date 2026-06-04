@@ -5,11 +5,19 @@ from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
+
+def not_tests(module_name):
+    return ".tests" not in module_name and not module_name.endswith(".tests")
+
+
 hiddenimports = (
-    collect_submodules("h5netcdf")
-    + collect_submodules("netCDF4")
-    + collect_submodules("igor2")
-    + collect_submodules("xarray")
+    ["matplotlib.backends.backend_qtagg"]
+    + collect_submodules("h5netcdf", filter=not_tests)
+    + collect_submodules("netCDF4", filter=not_tests)
+    + collect_submodules("h5py", filter=not_tests)
+    + collect_submodules("igor2", filter=not_tests)
+    + collect_submodules("openpyxl", filter=not_tests)
+    + collect_submodules("xarray", filter=not_tests)
 )
 
 a = Analysis(
