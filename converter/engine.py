@@ -62,23 +62,29 @@ def read_as_xarray(path: Path, *, pxt_channel: int = 0,
         return normalize_da30_dims(legacy_result_to_dataarray(read_txt(path), name=path.stem))
     if fmt == "zip":
         return normalize_da30_dims(load_zip(path))
-    if fmt in {"pxt", "pxp"}:
+    if fmt == "pxt":
+        sidecar_txt = path.with_suffix(".txt")
+        if sidecar_txt.exists():
+            result = read_txt(sidecar_txt)
+            result.setdefault("ses_params", {})["source_reader"] = "txt_sidecar"
+            return normalize_da30_dims(legacy_result_to_dataarray(result, name=path.stem))
+        result = read_pxt(
+            path,
+            channel=pxt_channel,
+            subtract_dark=pxt_subtract_dark,
+            energy_offset_override=pxt_energy_offset,
+            energy_step_override=pxt_energy_step,
+            angle_offset_override=pxt_angle_offset,
+            angle_step_override=pxt_angle_step,
+        )
+        result.setdefault("ses_params", {})["source_reader"] = "da30_pxt"
+        return normalize_da30_dims(legacy_result_to_dataarray(result, name=path.stem))
+    if fmt == "pxp":
         try:
             from converter.readers.igor_reader import load_experiment
             return normalize_da30_dims(load_experiment(path, recursive=True))
         except Exception:
-            if fmt != "pxt":
-                raise
-            result = read_pxt(
-                path,
-                channel=pxt_channel,
-                subtract_dark=pxt_subtract_dark,
-                energy_offset_override=pxt_energy_offset,
-                energy_step_override=pxt_energy_step,
-                angle_offset_override=pxt_angle_offset,
-                angle_step_override=pxt_angle_step,
-            )
-            return normalize_da30_dims(legacy_result_to_dataarray(result, name=path.stem))
+            raise
     raise ValueError(f"Unknown format: {fmt}")
 
 
