@@ -74,7 +74,7 @@ conda run -n convert-da30 python converter_app.py
 | `.pxp` | 递归读取 IGOR experiment；多 wave 内容可能形成 `xarray.DataTree`。 |
 | `.zip` | 读取含 `Spectrum_*.ini` 与 `Spectrum_*.bin` 的 DA30 导出包；多区域内容可能形成 `xarray.DataTree`。 |
 
-可用的 PXT 参数为 `pxt_channel`（`-1` 表示自动选择）、`pxt_subtract_dark`、`pxt_energy_offset`、`pxt_energy_step`、`pxt_angle_offset` 和 `pxt_angle_step`。
+以下 PXT 参数仅供转换引擎的 Python 调用使用，当前 GUI 不提供这些选项：`pxt_channel`（`-1` 表示自动选择）、`pxt_subtract_dark`、`pxt_energy_offset`、`pxt_energy_step`、`pxt_angle_offset` 和 `pxt_angle_step`。
 
 ## 输出行为与当前限制
 
