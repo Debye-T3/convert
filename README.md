@@ -57,11 +57,11 @@ conda run -n convert-da30 python converter_app.py
 
 按以下步骤批量准备逐文件参数：
 
-1. 先在 `Select Files` 中选择源文件，使参数表生成对应的文件行。
-2. 在 `Parameters` 页点击 `Export Template`，导出 `parameters_template.xlsx`。
-3. 在工作簿中保留 `file` 或 `path` 列。
-4. 填写标准参数列或自定义参数列。
-5. 导入完成的 `.xlsx` 文件；与源文件匹配的行会填入逐文件覆盖参数。
+1. 如需按已选文件的文件名匹配，先在 `Select Files` 中选择这些源文件。
+2. 在 `Parameters` 页点击 `Export Template`，导出 `parameters_template.xlsx`。导出的工作簿包含表头和一行示例 `sample_data_001.txt`，不会自动写入已选文件名。
+3. 保留 `file` 或 `path` 列；删除或替换示例行，并为每个实际源文件添加一行。
+4. 该列中的源文件引用可以是绝对路径、相对于该 Excel 工作簿所在目录的路径，或已在 `Select Files` 中选择且存在的文件的文件名。每个引用都必须指向存在的源文件。
+5. 填写标准参数列或自定义参数列后导入 `.xlsx`；与源文件匹配的行会填入逐文件覆盖参数。
 
 代表性的标准字段包括：`sample_name`、`sample_id`、位置字段（`position_x`、`position_y`、`position_z`）、样品角度（`position_polar`、`position_tilt`、`position_azimuth`）、`temperature_K`、`photon_energy_eV`、`polarization`、`slit` 和 `work_function_eV`。
 
@@ -72,7 +72,7 @@ conda run -n convert-da30 python converter_app.py
 | `.txt` | 读取 DA30 文本导出并标准化能量/角度维度。 |
 | `.pxt` | 若旁边存在同名 `.txt`，优先读取该文本文件；否则使用 DA30 PXT 读取器。 |
 | `.pxp` | 递归读取 IGOR experiment；多 wave 内容可能形成 `xarray.DataTree`。 |
-| `.zip` | 读取含 `Spectrum_*.ini` 与 `Spectrum_*.bin` 的 DA30 导出包；多区域内容可能形成 `xarray.DataTree`。 |
+| `.zip` | 读取 DA30 导出包根目录中的 `Spectrum_<region>.bin`，并读取同一根目录中的 `Spectrum_<region>.ini` 与 `<region>.ini`；多区域内容可能形成 `xarray.DataTree`。 |
 
 以下 PXT 参数仅供转换引擎的 Python 调用使用，当前 GUI 不提供这些选项：`pxt_channel`（`-1` 表示自动选择）、`pxt_subtract_dark`、`pxt_energy_offset`、`pxt_energy_step`、`pxt_angle_offset` 和 `pxt_angle_step`。
 
@@ -92,7 +92,7 @@ conda run -n convert-da30 python converter_app.py
 | `run.bat` 找不到 Conda 或 Python | 使用上面的可移植 Conda 启动命令，或修改批处理文件中的路径。 |
 | `.pxt` 使用了意外的数据 | 检查其旁边是否存在同名 `.txt`；存在时程序会优先读取该文本文件。 |
 | 输出文件名带有 `_1` 或 `_2` | 同名基础 H5 文件已存在；这是避免覆盖已有结果的自动命名。 |
-| `.zip` 无法读取 | 确认压缩包是 DA30 导出包，并包含所需的 `Spectrum_*.ini` 与 `Spectrum_*.bin` 成员。 |
+| `.zip` 无法读取 | 确认压缩包是 DA30 导出包；每个区域的三个成员必须都位于压缩包根目录：`Spectrum_<region>.bin`、`Spectrum_<region>.ini` 和 `<region>.ini`。 |
 | 单独复制打包后的可执行程序无法运行 | 分发完整的 onedir 文件夹，而不是只复制可执行程序。 |
 
 ## 维护者说明

@@ -159,11 +159,11 @@ The step text must state:
 
 Explain the exact workflow:
 
-1. Select the source files so the parameter table has file rows.
-2. Export `parameters_template.xlsx` from the Parameters tab.
-3. Keep a `file` or `path` column in the workbook.
-4. Fill standard or custom parameter columns.
-5. Import the completed `.xlsx`; matching rows populate per-file overrides.
+1. If matching by selected filenames, select those existing source files in `Select Files` first.
+2. Export `parameters_template.xlsx` from the Parameters tab; explain that it always contains a header row and one illustrative `sample_data_001.txt` row, not the selected filenames.
+3. Keep a `file` or `path` column; replace or delete the illustrative row and add one row for each real source file.
+4. Explain that a source reference may be an absolute path, a path relative to the workbook, or the basename of an already-selected existing file, and that every reference must exist.
+5. Fill standard or custom parameter columns, then import the completed `.xlsx`; matching rows populate per-file overrides.
 
 List representative standard fields: `sample_name`, `sample_id`, positions, sample angles, `temperature_K`, `photon_energy_eV`, `polarization`, `slit`, and `work_function_eV`.
 
@@ -176,7 +176,7 @@ Create a Markdown table with one row per extension and these verified rules:
 | `.txt` | 读取 DA30 文本导出并标准化能量/角度维度。 |
 | `.pxt` | 若旁边存在同名 `.txt`，优先读取该文本文件；否则使用 DA30 PXT 读取器。 |
 | `.pxp` | 递归读取 IGOR experiment；多 wave 内容可能形成 `xarray.DataTree`。 |
-| `.zip` | 读取含 `Spectrum_*.ini` 与 `Spectrum_*.bin` 的 DA30 导出包；多区域内容可能形成 `xarray.DataTree`。 |
+| `.zip` | 读取根目录中的 `Spectrum_<region>.bin`，以及同一根目录中的 `Spectrum_<region>.ini` 和 `<region>.ini`；多区域内容可能形成 `xarray.DataTree`。 |
 
 Below the table, document the available PXT parameters: `pxt_channel` (`-1` for auto), `pxt_subtract_dark`, `pxt_energy_offset`, `pxt_energy_step`, `pxt_angle_offset`, and `pxt_angle_step`.
 
@@ -198,7 +198,7 @@ Cover these concrete cases and resolutions:
 - `run.bat` cannot find Conda/Python: use the portable Conda command or update the paths in the batch file.
 - `.pxt` appears to use unexpected data: check whether a same-stem `.txt` exists beside it.
 - Output name has `_1` or `_2`: an earlier H5 with the base name already exists.
-- `.zip` fails to load: verify the archive is a DA30 export containing the required spectrum `.ini` and `.bin` members.
+- `.zip` fails to load: verify the archive has root-level `Spectrum_<region>.bin`, `Spectrum_<region>.ini`, and `<region>.ini` members for every region.
 - Packaged executable fails when copied alone: distribute the full onedir folder.
 
 - [ ] **Step 8: Add maintainer documentation**
