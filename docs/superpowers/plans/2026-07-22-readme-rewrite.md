@@ -40,7 +40,7 @@
 Run:
 
 ```powershell
-conda run -n convert-da30 python -c "from PySide6.QtWidgets import QApplication; from gui.main_window import MainWindow; print(MainWindow.__name__)"
+.venv\Scripts\python.exe -c "from PySide6.QtWidgets import QApplication; from gui.main_window import MainWindow; print(MainWindow.__name__)"
 ```
 
 Expected: exit code 0 and output containing `MainWindow`.
@@ -61,7 +61,7 @@ Run this PowerShell command from the repository root:
 
 ```powershell
 $env:QT_QPA_PLATFORM = 'offscreen'
-conda run -n convert-da30 python -c "from pathlib import Path; from PySide6.QtWidgets import QApplication; from gui.main_window import MainWindow; app=QApplication([]); w=MainWindow(); w.resize(960,700); w.show(); app.processEvents(); out=Path('docs/images/readme'); names=['select-files','parameters','convert','h5-info']; [(w.tabs.setCurrentIndex(i), app.processEvents(), w.grab().save(str(out/f'{name}.png'), 'PNG')) for i,name in enumerate(names)]; w.close()"
+.venv\Scripts\python.exe -c "from pathlib import Path; from PySide6.QtWidgets import QApplication; from gui.main_window import MainWindow; app=QApplication([]); w=MainWindow(); w.resize(960,700); w.show(); app.processEvents(); out=Path('docs/images/readme'); names=['select-files','parameters','convert','h5-info']; [(w.tabs.setCurrentIndex(i), app.processEvents(), w.grab().save(str(out/f'{name}.png'), 'PNG')) for i,name in enumerate(names)]; w.close()"
 ```
 
 Expected: the four files listed above are created as valid PNG images.
@@ -71,7 +71,7 @@ Expected: the four files listed above are created as valid PNG images.
 Run:
 
 ```powershell
-conda run -n convert-da30 python -c "from pathlib import Path; from PySide6.QtGui import QImage; p=Path('docs/images/readme'); [(lambda img,n: print(n, img.width(), img.height(), img.format().name))(QImage(str(p/n)), n) for n in ['select-files.png','parameters.png','convert.png','h5-info.png']]"
+.venv\Scripts\python.exe -c "from pathlib import Path; from PySide6.QtGui import QImage; p=Path('docs/images/readme'); [(lambda img,n: print(n, img.width(), img.height(), img.format().name))(QImage(str(p/n)), n) for n in ['select-files.png','parameters.png','convert.png','h5-info.png']]"
 ```
 
 Expected: four output lines, each reporting `960 700` and a non-invalid image format.
@@ -274,7 +274,7 @@ Expected: no matches.
 Run:
 
 ```powershell
-conda run -n convert-da30 python -m unittest discover -s tests
+.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 Expected: all discovered tests pass with exit code 0.
