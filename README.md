@@ -1,96 +1,133 @@
-# DA30 HDF5 Converter
+# DA30 HDF5 转换器：实验室工作流程手册
 
-这是一个面向 Windows 桌面的 Python 3.11 应用，用于把 ARPES / Scienta DA30 数据转换为 ERLab 和 xarray 可读取的 HDF5 文件。应用入口是 `converter_app.py`，界面使用 PySide6。
+这是一个面向 Windows 桌面的 Python 3.11 PySide6 工具，用于将 ARPES / Scienta DA30 数据转换为可由 ERLab 和 xarray 读取的 HDF5 文件。
 
-## 支持的输入
+## 可用功能
 
-- DA30 `.txt` 导出文件
-- DA30 `.pxt` 二进制文件
-- IGOR `.pxp` 实验文件
-- DA30 `.zip` 导出包，包含 `Spectrum_*.ini` 和 `Spectrum_*.bin`
+- 批量选择 `.txt`、`.pxt`、`.pxp` 与 DA30 `.zip` 输入文件。
+- 设置批处理默认参数、逐文件覆盖参数、自定义元数据字段，并支持 Excel 导入/导出。
+- 写出符合 xarray/ERLab 约定的 HDF5 文件。
+- 使用避免冲突的输出文件名。
+- 在 GUI 内查看已转换 H5 文件的结构。
 
-转换结果会写出为 `.h5`，可选生成 `.png` 预览图。`.pxt` 读取支持选择通道、自动选择通道、暗通道扣除，以及能量轴和角度轴校准覆盖。
+## 环境准备与启动
 
-## 项目结构
-
-```text
-converter_app.py        GUI 入口
-converter/              转换、读取、HDF5/xarray 写出和预览逻辑
-converter/readers/      txt、pxt/pxp、IGOR、DA30 zip 读取器
-gui/                    PySide6 界面和各工作流标签页
-tests/                  纯 Python 行为测试
-data/converted_h5/      本地转换输出，不作为源码维护
-data/previews/          本地预览图输出，不作为源码维护
-build/                  PyInstaller 构建中间产物
-dist/                   PyInstaller 打包输出
-```
-
-`converter/` 不依赖 Qt；GUI 相关代码应放在 `gui/`。
-
-## 环境准备
-
-使用仓库中的 conda 环境文件创建或更新环境：
+运行环境为 Windows、Conda，以及仓库中已检查入版本控制的 Python 3.11 环境定义。首次使用时创建环境；需要更新依赖时运行第二条命令：
 
 ```bat
 conda env create -f environment.yml
 conda env update -n convert-da30 -f environment.yml
 ```
 
-## 本地运行
+使用以下可移植命令启动程序：
 
 ```bat
-run.bat
+conda run -n convert-da30 python converter_app.py
 ```
 
-`run.bat` 会优先使用 `%USERPROFILE%\anaconda3\Scripts\conda.exe run -n convert-da30`，找不到时回退到 `D:\Anaconda\envs\convert-da30\python.exe`。
+`run.bat` 便于原始工作站使用，但其中写死了 `D:\Projects\convert`，并在找不到 Conda 时回退到 `D:\Anaconda` 下的环境。其他电脑请使用上面的可移植 Conda 命令，或按本机情况修改脚本中的路径。
 
-## 打包 Windows 可执行程序
+## GUI 转换流程
 
-```bat
-build_exe.bat
-```
+### 1. `Select Files`
 
-打包输出位于：
+将支持的文件拖放到窗口中，或点击浏览选择文件；移除不需要的条目后继续。
+
+![选择输入文件界面](docs/images/readme/select-files.png)
+
+### 2. `Parameters`
+
+填写批处理默认值；可在每个文件对应的表格行中覆盖值，添加自定义字段，并按需使用 Excel。
+
+![实验参数设置界面](docs/images/readme/parameters.png)
+
+### 3. `Convert`
+
+选择输出文件夹并启动转换；在界面中查看进度和日志，完成后可打开结果文件夹。
+
+![批量转换界面](docs/images/readme/convert.png)
+
+### 4. `H5 Info`
+
+浏览输出目录，或直接打开一个 `.h5` 文件，检查与 xarray 相关的内部结构。
+
+![H5 文件信息界面](docs/images/readme/h5-info.png)
+
+## 通过 Excel 交换实验参数
+
+按以下步骤批量准备逐文件参数：
+
+1. 先在 `Select Files` 中选择源文件，使参数表生成对应的文件行。
+2. 在 `Parameters` 页点击 `Export Template`，导出 `parameters_template.xlsx`。
+3. 在工作簿中保留 `file` 或 `path` 列。
+4. 填写标准参数列或自定义参数列。
+5. 导入完成的 `.xlsx` 文件；与源文件匹配的行会填入逐文件覆盖参数。
+
+代表性的标准字段包括：`sample_name`、`sample_id`、位置字段（`position_x`、`position_y`、`position_z`）、样品角度（`position_polar`、`position_tilt`、`position_azimuth`）、`temperature_K`、`photon_energy_eV`、`polarization`、`slit` 和 `work_function_eV`。
+
+## 输入格式参考
+
+| 格式 | 当前读取行为 |
+| --- | --- |
+| `.txt` | 读取 DA30 文本导出并标准化能量/角度维度。 |
+| `.pxt` | 若旁边存在同名 `.txt`，优先读取该文本文件；否则使用 DA30 PXT 读取器。 |
+| `.pxp` | 递归读取 IGOR experiment；多 wave 内容可能形成 `xarray.DataTree`。 |
+| `.zip` | 读取含 `Spectrum_*.ini` 与 `Spectrum_*.bin` 的 DA30 导出包；多区域内容可能形成 `xarray.DataTree`。 |
+
+可用的 PXT 参数为 `pxt_channel`（`-1` 表示自动选择）、`pxt_subtract_dark`、`pxt_energy_offset`、`pxt_energy_step`、`pxt_angle_offset` 和 `pxt_angle_step`。
+
+## 输出行为与当前限制
+
+- GUI 默认输出文件夹为 `data/converted_h5/`。
+- 输出文件扩展名为 `.h5`，使用与 xarray 兼容的 `h5netcdf` / NetCDF4 风格存储。
+- 不会覆盖已有文件：`name.h5` 已存在时会写为 `name_1.h5`，再冲突则为 `name_2.h5`。
+- 单区域源通常加载为 `xarray.DataArray` 或 `xarray.Dataset`；多区域源可能加载为 `xarray.DataTree`。
+- 后端保留了预览图生成代码，但当前主窗口未包含 `PreviewTab`，且 GUI 转换工作线程已禁用预览。
+- 应用不会修改源数据文件。
+
+## 故障排查
+
+| 情况 | 处理方式 |
+| --- | --- |
+| `run.bat` 找不到 Conda 或 Python | 使用上面的可移植 Conda 启动命令，或修改批处理文件中的路径。 |
+| `.pxt` 使用了意外的数据 | 检查其旁边是否存在同名 `.txt`；存在时程序会优先读取该文本文件。 |
+| 输出文件名带有 `_1` 或 `_2` | 同名基础 H5 文件已存在；这是避免覆盖已有结果的自动命名。 |
+| `.zip` 无法读取 | 确认压缩包是 DA30 导出包，并包含所需的 `Spectrum_*.ini` 与 `Spectrum_*.bin` 成员。 |
+| 单独复制打包后的可执行程序无法运行 | 分发完整的 onedir 文件夹，而不是只复制可执行程序。 |
+
+## 维护者说明
+
+### 项目结构
 
 ```text
-dist\converter_app\converter_app.exe
+converter_app.py        GUI 入口
+converter/              转换逻辑、HDF5/xarray I/O 与格式读取协调
+converter/readers/      .txt、.pxt/.pxp、IGOR 与 DA30 .zip 读取器
+gui/                    PySide6 界面及各工作流标签页
+tests/                  自动化测试
+data/converted_h5/      示例或生成的转换输出
+build/                  PyInstaller 构建中间产物
+dist/                   PyInstaller 打包输出
 ```
 
-分发时请复制整个文件夹：
+`converter/` 应保持独立于 Qt；GUI 代码应放在 `gui/`。
 
-```text
-dist\converter_app
-```
-
-不要只复制 `converter_app.exe`，它依赖同目录下的库文件和资源文件。目标电脑不需要安装 Python 或 Conda；如果缺少 Microsoft Visual C++ Runtime，需要先安装对应运行库。
-
-## 测试
-
-当前 `main` 分支还没有完整的自动化测试套件。新增测试时请放在 `tests/`，优先覆盖 `converter/` 中的纯 Python 逻辑，例如格式识别、参数合并、读取器行为和 HDF5 输出路径。
-
-如果测试使用标准库 `unittest`：
+当前测试命令：
 
 ```bat
 conda run -n convert-da30 python -m unittest discover -s tests
 ```
 
-如果测试使用 `pytest`，请先确认环境中已安装 `pytest`：
+构建 Windows onedir 可执行程序：
 
 ```bat
-python -m pytest tests
+build_exe.bat
 ```
 
-## 不应提交的内容
+输出文件为：
 
-以下内容是本地配置、缓存、生成数据或构建产物，不应作为源码上传：
+```text
+dist\converter_app\converter_app.exe
+```
 
-- `.claude/`
-- `.pytest_cache/`
-- `__pycache__/`
-- `*.pyc`
-- `build/`
-- `dist/`
-- `data/converted_h5/`
-- `data/previews/`
-
-如果这些文件已经被 Git 跟踪，需要先从索引中移除；仅写入 `.gitignore` 不会自动取消跟踪。
+请分发完整的 `dist\converter_app` 目录。`build_exe.bat` 同样包含绝对路径；在其他工作站构建前需要按本机环境调整这些路径。
